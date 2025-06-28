@@ -163,12 +163,21 @@ class Mihoyobbs:
             return
         log.info("正在签到......")
         header = self.headers.copy()
+        # 按HAR文件顺序和内容补全请求头
+        header["content-type"] = "application/json; charset=UTF-8"
+        header["user-agent"] = "okhttp/4.9.3"
+        header["referer"] = "https://app.mihoyo.com"
+        header["host"] = "bbs-api.miyoushe.com"
         for forum in self.bbs_list:
             challenge = None
             for retry_count in range(2):
-                post_data = json.dumps({"gids": forum["id"]})
-                post_data.replace(' ', '')
+                # 保证gids为字符串
+                post_data = json.dumps({"gids": str(forum["id"])})
+                post_data = post_data.replace(' ', '')
                 header["DS"] = tools.get_ds2("", post_data)
+                # 只在有challenge时加
+                if challenge is not None:
+                    header["x-rpc-challenge"] = challenge
                 req = http.post(url=setting.bbs_sign_url, data=post_data, headers=header)
                 log.debug(req.text)
                 data = req.json()
@@ -187,7 +196,7 @@ class Mihoyobbs:
                     raise StokenError('Stoken expires')
                 else:
                     log.error(f'未知错误：{req.text}')
-            if challenge is not None:
+            if challenge is not None and "x-rpc-challenge" in header:
                 header.pop("x-rpc-challenge")
 
     # 看帖子
