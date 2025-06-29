@@ -97,8 +97,19 @@ class Mihoyobbs:
 
     # 获取任务列表，用来判断做了哪些任务
     def get_tasks_list(self, update=False):
+        import httpx
         log.info("正在获取任务列表")
-        req = http.get(url=setting.bbs_tasks_list, params={"point_sn": "myb"}, headers=self.task_header)
+        try:
+            req = http.get(url=setting.bbs_tasks_list, params={"point_sn": "myb"}, headers=self.task_header)
+        except httpx.ConnectError as e:
+            log.error(f"网络连接失败，5分钟后自动重试。错误信息: {e}")
+            time.sleep(300)
+            # 只重试一次，若还失败则抛出异常
+            try:
+                req = http.get(url=setting.bbs_tasks_list, params={"point_sn": "myb"}, headers=self.task_header)
+            except Exception as e2:
+                log.error(f"重试后依然失败，请检查网络环境。错误信息: {e2}")
+                raise
         data = req.json()
         if "err" in data["message"] or data["retcode"] == -100:
             if not update and login.update_cookie_token():
@@ -167,8 +178,9 @@ class Mihoyobbs:
         header["content-type"] = "application/json; charset=UTF-8"
         header["user-agent"] = "okhttp/4.9.3"
         header["referer"] = "https://app.mihoyo.com"
-        header["host"] = "bbs-api.miyoushe.com"
         for forum in self.bbs_list:
+            if forum is None:
+                continue
             challenge = None
             for retry_count in range(2):
                 # 保证gids为字符串
@@ -187,7 +199,7 @@ class Mihoyobbs:
                     if challenge is not None:
                         header["x-rpc-challenge"] = challenge
                 elif "err" not in data["message"] and data["retcode"] == 0:
-                    log.info(str(forum["name"] + data["message"]))
+                    log.info(str(forum.get("name", "") + data["message"]))
                     wait()
                     break
                 elif data["retcode"] == -100:
